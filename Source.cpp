@@ -12,10 +12,11 @@ void maxMatrix(int argc, char* argv[]);
 void dotProduct(int argc, char* argv[]);
 void monteCarloPi(int argc, char* argv[]);
 void averagePositiveCompon(int argc, char* argv[]);
+void vectorInvert(int argc, char* argv[]);
 
 int main(int argc, char* argv[]){
 
-	matrixVectorMultiply(argc, argv);
+	//matrixVectorMultiply(argc, argv);
 	//hello_world(argc, argv);
 	//vectorComponentsSum(argc, argv);
 	//vectorMax(argc, argv);
@@ -23,6 +24,7 @@ int main(int argc, char* argv[]){
 	//dotProduct(argc, argv);
 	//monteCarloPi(argc, argv);
 	//averagePositiveCompon(argc, argv);
+	vectorInvert(argc, argv);
 
 	
 }
@@ -347,6 +349,46 @@ void matrixVectorMultiply(int argc, char* argv[]){
 	}
 	system("pause");
 
+
+}
+
+/*15.	Инвертировать массив(7 баллов) */
+void vectorInvert(int argc, char* argv[]){
+
+	double x[100], z[100], y[100];
+	int ProcRank, ProcNum, N = 100;
+	MPI_Status Status;
+
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &ProcNum);
+	MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+
+	if (ProcRank == 0) {
+		for (int i = 0; i < N; i++){
+			int max = 1000;
+			int min = 0;
+			y[i] = 0;
+			x[i] = i;
+		}
+	}
+
+	MPI_Bcast(x, N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	MPI_Bcast(y, N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+	int k = N / ProcNum;
+	int i1 = k * ProcRank;
+	int i2 = k * (ProcRank + 1);
+	if (ProcRank == ProcNum - 1) i2 = N;
+	for (int i = i1; i < i2; i++)
+		y[N - 1 - i] = x[i];
+
+	MPI_Reduce(&y, &z, N, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+	MPI_Finalize();
+
+	for (int i = 0; i < N; i++){
+		printf("\nProds[%i] = %10.2f", i, z[i]);
+	}
+	system("pause");
 
 }
 
