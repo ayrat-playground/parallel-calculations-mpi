@@ -4,6 +4,8 @@
 #include <time.h>
 #include <io.h>
 #include "mpi.h"
+#include "iostream"
+using namespace std;
 
 void matrixVectorMultiply(int argc, char* argv[]);
 void hello_world(int argc, char* argv[]);
@@ -17,8 +19,12 @@ void vectorInvert(int argc, char* argv[]);
 void matrixVectorMultiplyColumn(int argc, char* argv[]);
 int MatrixNormal(int argc, char **argv);
 int MatrixInverse(int argc, char **argv);
+int multMatrixFinal(int argc, char* argv[]);
+int timeRecv(int argc, char *argv[]);
+int poKrugu(int argc, char *argv[]);
+int InverFinal(int argc, char *argv[]);
 
-int main(int argc, char* argv[]){
+void main(int argc, char* argv[]){
 
 	//matrixVectorMultiply(argc, argv);
 	//hello_world(argc, argv);
@@ -29,7 +35,12 @@ int main(int argc, char* argv[]){
 	//monteCarloPi(argc, argv);
 	//averagePositiveCompon(argc, argv);
 	//matrixVectorMultiply(argc, argv);
-	 MatrixNormal(argc, argv);
+	 //MatrixNormal(argc, argv);
+	//multMatrixFinal(argc, argv);
+	//timeRecv(argc, argv);
+	//poKrugu(argc, argv);
+	InverFinal(argc, argv);
+	
 
 	
 }
@@ -146,7 +157,7 @@ void vectorMax(int argc, char* argv[]){
 /*2.	Max матрицы(5 балла)*/
 void maxMatrix(int argc, char* argv[]){
 
-	double x[100][100], TotalMax, ProcMax = 0.0;
+	double x[100][100], TotalMax, max = 0, ProcMax;
 	int ProcRank, ProcNum, N = 100;
 	MPI_Status Status;
 
@@ -170,14 +181,20 @@ void maxMatrix(int argc, char* argv[]){
 	int i1 = k * ProcRank;
 	int i2 = k * (ProcRank + 1);
 	if (ProcRank == ProcNum - 1) i2 = N;
-	for (int i = i1; i < i2; i++)
-		for (int j = 0; j<N; j++){
-			if (x[i][j]>ProcMax){
+	for (int i = i1; i < i2; i++){
+		ProcMax = x[i][0];
+		for (int j = 0; j < N; j++){
+			if (x[i][j] < ProcMax){
 				ProcMax = x[i][j];
+
 			}
 		}
+		if (max < ProcMax){
+			max = ProcMax;
+		}
+	}
 
-	MPI_Reduce(&ProcMax, &TotalMax, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+	MPI_Reduce(&max, &TotalMax, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
 
 	if (ProcRank == 0)
 		printf("\nTotal Max = %10.2f", TotalMax);
@@ -515,9 +532,9 @@ int MatrixNormal(int argc, char **argv) {
 int MatrixInverse(int argc, char **argv) {
 	int myrank, total, N_PER_PROC = 2;
 
-	double *A, *B, *C;	// Используются только в root
+	double *A, *B, *C;	
 
-	double *a, *b, *c;	// Лента матрицы [mxn], вектор [n], рез-т [m]
+	double *a, *b, *c;	// [mxn],  [n],  [m]
 	int n, m;
 	int i, j;
 	int intBuf[2];
@@ -527,7 +544,7 @@ int MatrixInverse(int argc, char **argv) {
 	MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 	printf("Total=%d, rank=%d\n", total, myrank);
 
-	if (!myrank) {	// Подготовка исх. данных (только root)
+	if (!myrank) {	
 		n = N_PER_PROC * total;
 		A = (double *)malloc(sizeof(double)*n*n);
 		B = (double *)malloc(sizeof(double)*n);
@@ -565,7 +582,7 @@ int MatrixInverse(int argc, char **argv) {
 	b = (double *)malloc(sizeof(double)*n);
 	c = (double *)malloc(sizeof(double)*m);
 
-	if (!myrank) {	// Лишнее действие, B не нужен
+	if (!myrank) {	
 		for (int i = 0; i < n; i++){
 			b[i] = B[i];
 		}
@@ -590,4 +607,210 @@ int MatrixInverse(int argc, char **argv) {
 	MPI_Finalize();
 	system("pause");
 	exit(0);
+}
+
+int multMatrixFinal(int argc, char* argv[]){
+	int x[10][10];
+	int y[10];
+	int ProcRank, ProcNum, N = 10;
+	int resultMin;
+	int resultMax;
+
+	
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &ProcNum);
+	MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+	int elements_per_proc = N * N / ProcNum;
+	int *subarr1 = new int[elements_per_proc];
+
+	srand(time(NULL));
+	if (ProcRank == 0){
+		for (int i = 0; i < N; i++)
+		{
+			for (int j = 0; j < N; j++) {
+				x[i][j] = rand() % 100;
+			}
+		}
+		for (int i = 0; i < N; i++) {
+			for (int j = 0; j < N; j++) {
+				printf(" %d ", x[j][i]);
+			}
+			printf("\n");
+		}
+		printf("\n");
+		for (int i = 0; i < N; i++)
+		{
+			y[i] = rand() % 100;
+			printf(" %d ", y[i]);
+		}
+		printf("\n\n");
+	}
+	// Distribute the arrays
+	MPI_Scatter(x, elements_per_proc, MPI_INT,
+		subarr1, elements_per_proc, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(y, N, MPI_INT, 0, MPI_COMM_WORLD);
+
+	for (int i = 0; i < elements_per_proc; i++)
+		subarr1[i] *= y[i % N];
+
+	// Perform global max reduction
+	MPI_Gather(subarr1, elements_per_proc, MPI_INT, x, elements_per_proc, MPI_INT, 0, MPI_COMM_WORLD);
+	if (ProcRank == 0)
+		for (int i = 0; i < N; i++) {
+			for (int j = 0; j < N; j++) {
+				printf(" %d ", x[j][i]);
+			}
+			printf("\n");
+		}
+	MPI_Finalize();
+	system("pause");
+	return 0;
+}
+
+int timeRecv(int argc, char *argv[]) {
+
+	MPI_Status status;
+	int rank, size;
+	int height = 10;
+	int n = 100;
+	int a[100];
+	for (int i = 0; i < n; i++)
+		a[i] = i;
+
+	int min = a[20];
+	int bufsize;
+	int *buf;
+	bufsize = 3 * MPI_BSEND_OVERHEAD + min;
+	buf = (int *)malloc(bufsize);
+	//Иницилизируем mpi
+	MPI_Init(&argc, &argv);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	//Отправляем другим процессам
+	MPI_Bcast(a, n, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Buffer_attach(buf, bufsize);
+	double startSend, endSend, startSsend, endSsend, startBsend, endBsend, startRsend, endRsend;
+	if (rank == 0){
+		//SEND
+		startSend = MPI_Wtime();
+		MPI_Send(&min, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
+		MPI_Recv(&min, 1, MPI_INT, 1, 0, MPI_COMM_WORLD, &status);
+		endSend = MPI_Wtime();
+
+		//SSEND
+		startSsend = MPI_Wtime();
+		MPI_Ssend(&min, 1, MPI_INT, 1, 1, MPI_COMM_WORLD);
+		MPI_Recv(&min, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &status);
+		endSsend = MPI_Wtime();
+
+		//BSEND
+		startBsend = MPI_Wtime();
+		MPI_Bsend(&min, 1, MPI_INT, 1, 2, MPI_COMM_WORLD);
+		MPI_Recv(&min, 1, MPI_INT, 1, 2, MPI_COMM_WORLD, &status);
+		endBsend = MPI_Wtime();
+
+		//RSEND-
+		startRsend = MPI_Wtime();
+		MPI_Rsend(&min, 1, MPI_INT, 1, 3, MPI_COMM_WORLD);
+		MPI_Recv(&min, 1, MPI_INT, 1, 3, MPI_COMM_WORLD, &status);
+		endRsend = MPI_Wtime();
+		//Вывод времени
+		cout << "Send = " << endSend - startSend << " Ssend = " << endSsend - startSsend << " Bsend = " << endBsend - startBsend << " Rsend = " << endRsend - startRsend << endl;
+
+	}
+
+	if (rank == 1){
+
+		//SEND
+		MPI_Recv(&min, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+		MPI_Send(&min, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+
+		//SSEND
+		MPI_Recv(&min, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &status);
+		MPI_Ssend(&min, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+
+		//BSEND
+		MPI_Recv(&min, 1, MPI_INT, 0, 2, MPI_COMM_WORLD, &status);
+		MPI_Bsend(&min, 1, MPI_INT, 0, 2, MPI_COMM_WORLD);
+
+		//RSEND
+		MPI_Recv(&min, 1, MPI_INT, 0, 3, MPI_COMM_WORLD, &status);
+		MPI_Rsend(&min, 1, MPI_INT, 0, 3, MPI_COMM_WORLD);
+	}
+
+	MPI_Finalize();
+	return 0;
+	system("pause");
+}
+
+int poKrugu(int argc, char *argv[]){
+	int rank, size;
+	int digit = 2;
+	MPI_Status status;
+	MPI_Init(&argc, &argv);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+	if (rank == 0) {
+		MPI_Ssend(&digit, 1, MPI_INTEGER, 1, 3, MPI_COMM_WORLD);
+	}
+	else {
+		MPI_Recv(&digit, 1, MPI_INTEGER, rank - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		digit++;
+		if (rank != size - 1) {
+			MPI_Ssend(&digit, 1, MPI_INTEGER, rank + 1, 4, MPI_COMM_WORLD);
+		}
+		else {
+			MPI_Ssend(&digit, 1, MPI_INTEGER, 0, 5, MPI_COMM_WORLD);
+		}
+
+	}
+	if (rank == 0) {
+		MPI_Recv(&digit, 1, MPI_INTEGER, size - 1, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		cout << "Digit is " << digit;
+	}
+	MPI_Finalize();
+	return 0;
+}
+
+int InverFinal(int argc, char *argv[]) {
+	int n = 100;
+	int *a = new int[100];
+	for (int i = 0; i < n; i++) {
+		a[i] = i;
+	}
+	int myRank, size;
+
+	MPI_Status status;
+	MPI_Init(&argc, &argv);
+	MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	if (myRank != size - 1) {
+		for (int i = myRank; i < n / 2; i += (size - 1)) {
+			swap(a[i], a[n - 1 - i]);
+		}
+		MPI_Send(a, n, MPI_INT, size - 1, 0, MPI_COMM_WORLD);
+	}
+	else {
+		cout << "Array:" << endl;
+		for (int i = 0; i < n; i++) {
+			cout << a[i] << " ";
+		}
+		cout << endl;
+		for (int i = 0; i < size - 1; i++) {
+			int *tempArr = new int[n];
+			MPI_Recv(tempArr, n, MPI_INT, i, 0, MPI_COMM_WORLD, &status);
+			for (int j = i; j < n / 2; j += (size - 1)) {
+				a[j] = tempArr[j];
+				a[n - 1 - j] = tempArr[n - 1 - j];
+			}
+		}
+		cout << "Return array :" << endl;
+		for (int i = 0; i < n; i++) {
+			cout << a[i] << " ";
+		}
+		cout << endl;
+	}
+	MPI_Finalize();
+	system("pause");
+	return 0;
 }
